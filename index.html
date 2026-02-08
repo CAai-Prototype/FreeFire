@@ -3,117 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAai_FF_PROTOTYPE</title>
+    <title>FREE_FIRE_PRO_CAai</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
-        #hud {
-            position: absolute; top: 20px; left: 20px; color: #0f0;
-            background: rgba(0, 0, 0, 0.8); padding: 15px; border: 2px solid #0f0;
-            pointer-events: none; z-index: 10;
+        body { margin: 0; overflow: hidden; background: #111; font-family: 'Arial Black', sans-serif; }
+        #ui { position: absolute; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* Professional HUD */
+        .hud-box { position: absolute; background: rgba(0,0,0,0.6); border: 2px solid #ffba08; color: #ffba08; padding: 10px; border-radius: 5px; }
+        #top-info { top: 20px; left: 50%; transform: translateX(-50%); font-size: 20px; text-shadow: 2px 2px #000; }
+        #ammo-ui { bottom: 30px; right: 30px; font-size: 30px; }
+        #health-ui { bottom: 30px; left: 30px; width: 250px; }
+        .hp-bar { width: 100%; height: 20px; background: #444; border: 2px solid #fff; }
+        .hp-fill { width: 100%; height: 100%; background: #00ff00; transition: 0.3s; }
+
+        /* Crosshair */
+        #crosshair { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 30px; height: 30px; border: 2px solid rgba(255,255,255,0.5); border-radius: 50%;
         }
-        #crosshair {
-            position: absolute; top: 50%; left: 50%; width: 24px; height: 24px;
-            border: 2px solid #0f0; border-radius: 50%;
-            transform: translate(-50%, -50%); pointer-events: none;
-        }
-        #instruction {
-            position: absolute; bottom: 20px; width: 100%; text-align: center;
-            color: #fff; background: rgba(0,0,0,0.5); font-size: 14px;
-        }
+        #crosshair::before { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 10px; background: red; transform: translate(-50%, -50%); }
+        #crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; width: 10px; height: 2px; background: red; transform: translate(-50%, -50%); }
+
+        #flash { position: absolute; width: 100%; height: 100%; background: white; opacity: 0; pointer-events: none; }
     </style>
 </head>
 <body>
 
-    <div id="hud">
-        OPERATOR: CAai_PROTOTYPE<br>
-        STATUS: INDESTRUCTIBLE<br>
-        AMMO: <span id="ammo">30</span>/INF<br>
-        KILLS: <span id="kills">0</span>
+    <div id="flash"></div>
+    <div id="ui">
+        <div id="top-info" class="hud-box">ALIVE: <span id="alive">15</span> | KILLS: <span id="kills">0</span></div>
+        <div id="health-ui" class="hud-box">HP: 100 <div class="hp-bar"><div class="hp-fill"></div></div></div>
+        <div id="ammo-ui" class="hud-box">🔥 <span id="ammo">30</span>/INF</div>
+        <div id="crosshair"></div>
     </div>
-    <div id="crosshair"></div>
-    <div id="instruction">CLICK TO START | WASD to Move | SPACE to Jump | MOUSE to Shoot</div>
 
     <script type="module">
         import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
         import { PointerLockControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/PointerLockControls.js';
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x020202);
-        scene.fog = new THREE.Fog(0x000000, 1, 60);
+        scene.background = new THREE.Color(0x87ceeb); // Sky Blue
+        scene.fog = new THREE.Fog(0x87ceeb, 20, 100);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // Lighting
-        const light = new THREE.HemisphereLight(0xeeeeff, 0x000000, 0.7);
-        scene.add(light);
+        // --- Realistic Lighting ---
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+        scene.add(hemiLight);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.position.set(5, 10, 7.5);
+        scene.add(sun);
 
-        // Bedrock Ground
-        const ground = new THREE.Mesh(
-            new THREE.PlaneGeometry(1000, 1000),
-            new THREE.MeshStandardMaterial({ color: 0x111111, wireframe: true })
-        );
+        // --- Ground (Battleground Texture) ---
+        const groundGeo = new THREE.PlaneGeometry(200, 200);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x3d5a20, roughness: 1 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // Enemies
+        // --- Enemies (Advanced Bots) ---
         const enemies = [];
-        function spawn() {
-            const bot = new THREE.Mesh(
-                new THREE.BoxGeometry(1.5, 3, 1.5),
-                new THREE.MeshStandardMaterial({ color: 0xff0000 })
-            );
-            bot.position.set(Math.random()*100-50, 1.5, Math.random()*100-50);
-            scene.add(bot);
-            enemies.push(bot);
-        }
-        for(let i=0; i<20; i++) spawn();
+        const createEnemy = () => {
+            const group = new THREE.Group();
+            // Body
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+            body.position.y = 1;
+            group.add(body);
+            // Red head (Target)
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+            head.position.y = 1.8;
+            group.add(head);
 
-        // Controls
+            group.position.set(Math.random()*80-40, 0, Math.random()*80-40);
+            scene.add(group);
+            enemies.push({ mesh: group, speed: Math.random() * 0.05 + 0.02 });
+        };
+        for(let i=0; i<15; i++) createEnemy();
+
+        // --- Controls ---
         const controls = new PointerLockControls(camera, document.body);
-        document.addEventListener('click', () => {
-            controls.lock();
-            document.getElementById('instruction').style.display = 'none';
-        });
+        document.addEventListener('click', () => controls.lock());
 
         let keys = {};
         document.onkeydown = (e) => keys[e.code] = true;
         document.onkeyup = (e) => keys[e.code] = false;
 
-        // Combat
+        // --- Shooting & Effects ---
         let ammo = 30, kills = 0;
         document.addEventListener('mousedown', () => {
             if(!controls.isLocked || ammo <= 0) return;
+            
             ammo--;
             document.getElementById('ammo').innerText = ammo;
-            
+
+            // Flash effect
+            document.getElementById('flash').style.opacity = '0.3';
+            setTimeout(() => document.getElementById('flash').style.opacity = '0', 50);
+
             const ray = new THREE.Raycaster();
             ray.setFromCamera(new THREE.Vector2(0,0), camera);
-            const hits = ray.intersectObjects(enemies);
+            const enemyObjects = enemies.map(e => e.mesh);
+            const hits = ray.intersectObjects(enemyObjects, true);
+
             if(hits.length > 0) {
-                hits[0].object.position.set(Math.random()*100-50, 1.5, Math.random()*100-50);
+                let hitObj = hits[0].object.parent;
+                hitObj.position.set(Math.random()*80-40, 0, Math.random()*80-40);
                 kills++;
                 document.getElementById('kills').innerText = kills;
             }
-            if(ammo === 0) setTimeout(() => { ammo = 30; document.getElementById('ammo').innerText = ammo; }, 1000);
+            if(ammo === 0) setTimeout(() => { ammo = 30; document.getElementById('ammo').innerText = ammo; }, 1200);
         });
 
-        // Loop
+        // --- Main Game Loop ---
         function animate() {
             requestAnimationFrame(animate);
             if(controls.isLocked) {
-                const speed = 0.3;
-                if(keys['KeyW']) controls.moveForward(speed);
-                if(keys['KeyS']) controls.moveForward(-speed);
-                if(keys['KeyA']) controls.moveRight(-speed);
-                if(keys['KeyD']) controls.moveRight(speed);
+                const moveSpeed = keys['ShiftLeft'] ? 0.3 : 0.15;
+                if(keys['KeyW']) controls.moveForward(moveSpeed);
+                if(keys['KeyS']) controls.moveForward(-moveSpeed);
+                if(keys['KeyA']) controls.moveRight(-moveSpeed);
+                if(keys['KeyD']) controls.moveRight(moveSpeed);
+
+                // Simple Bot AI: Move towards player
+                enemies.forEach(enemy => {
+                    enemy.mesh.lookAt(camera.position.x, 0, camera.position.z);
+                    enemy.mesh.translateZ(enemy.speed);
+                });
             }
             renderer.render(scene, camera);
         }
-        camera.position.y = 2;
+        camera.position.y = 1.8;
         animate();
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
     </script>
 </body>
 </html>
